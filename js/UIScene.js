@@ -4,12 +4,49 @@ class UIScene extends Phaser.Scene {
     }
 
     create() {
-        // Bật cảm ứng đa điểm (hỗ trợ ít nhất 2 ngón tay cùng lúc trên màn hình)
+        // Bật cảm ứng đa điểm
         this.input.addPointer(2);
 
         this.totalScore = 0;
         this.scoreText = this.add.text(20, 20, 'FOREST SCORE: 0', { fill: '#fff', fontSize: '24px', fontFamily: 'monospace' });
 
+        // --- NEW: NÚT CÀI ĐẶT VÀ BẢNG ÂM LƯỢNG ---
+        this.settingBtn = this.add.text(1130, 20, '⚙ CÀI ĐẶT', { fill: '#fff', fontSize: '20px', backgroundColor: '#333', padding: { x: 10, y: 5 }, fontFamily: 'monospace' })
+            .setInteractive({ useHandCursor: true });
+        
+        this.settingBtn.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation(); // Chặn Joystick
+            this.sound.play('click');
+            this.settingPanel.setVisible(true);
+        });
+
+        this.settingPanel = this.add.container(440, 200).setVisible(false).setDepth(20);
+        let sBg = this.add.graphics();
+        sBg.fillStyle(0x000000, 0.9);
+        sBg.lineStyle(2, 0xffffff);
+        sBg.fillRect(0, 0, 400, 250);
+        sBg.strokeRect(0, 0, 400, 250);
+        this.settingPanel.add(sBg);
+        
+        let sTitle = this.add.text(110, 20, 'CÀI ĐẶT ÂM THANH', { fill: '#ffcc00', fontSize: '20px', fontStyle: 'bold', fontFamily: 'monospace' });
+        this.volText = this.add.text(130, 100, 'ÂM LƯỢNG: 100%', { fill: '#fff', fontSize: '18px', fontFamily: 'monospace' });
+        
+        let btnDown = this.add.text(80, 95, '[ - ]', { fill: '#fff', fontSize: '24px', fontFamily: 'monospace' }).setInteractive();
+        let btnUp = this.add.text(280, 95, '[ + ]', { fill: '#fff', fontSize: '24px', fontFamily: 'monospace' }).setInteractive();
+        
+        btnDown.on('pointerdown', (p, lx, ly, e) => { e.stopPropagation(); this.changeVolume(-0.1); });
+        btnUp.on('pointerdown', (p, lx, ly, e) => { e.stopPropagation(); this.changeVolume(0.1); });
+
+        let closeSet = this.add.text(150, 180, '[ ĐÓNG ]', { fill: '#fff', fontSize: '20px', backgroundColor: '#333', padding: {x: 10, y: 5}, fontFamily: 'monospace' }).setInteractive();
+        closeSet.on('pointerdown', (p, lx, ly, e) => { 
+            e.stopPropagation(); 
+            this.sound.play('click'); 
+            this.settingPanel.setVisible(false); 
+        });
+
+        this.settingPanel.add([sTitle, this.volText, btnDown, btnUp, closeSet]);
+
+        // KHUNG CÂU HỎI
         this.panel = this.add.container(240, 100);
         this.panel.setVisible(false);
 
@@ -33,19 +70,27 @@ class UIScene extends Phaser.Scene {
             opt.setInteractive({ useHandCursor: true });
             opt.on('pointerover', () => opt.setFill('#ffcc00'));
             opt.on('pointerout', () => opt.setFill('#ffffff'));
-            opt.on('pointerdown', () => this.selectOption(i));
+            opt.on('pointerdown', (p, lx, ly, e) => { e.stopPropagation(); this.selectOption(i); });
             this.panel.add(opt);
             this.optionTexts.push(opt);
         }
 
         this.closeButton = this.add.text(350, 430, '[ TIẾP TỤC ]', { fill: '#fff', fontSize: '22px', backgroundColor: '#333', padding: { x: 10, y: 5 }, fontFamily: 'monospace' });
         this.closeButton.setInteractive({ useHandCursor: true });
-        this.closeButton.on('pointerdown', () => this.closePanel());
+        this.closeButton.on('pointerdown', (p, lx, ly, e) => { e.stopPropagation(); this.closePanel(); });
         this.closeButton.setVisible(false);
         this.panel.add(this.closeButton);
 
         // Gọi hàm tạo Joystick Nổi (Floating Joystick)
         this.createVirtualJoystick();
+    }
+
+    // --- NEW: Hàm chỉnh âm lượng tổng ---
+    changeVolume(amount) {
+        let newVol = Phaser.Math.Clamp(this.sound.volume + amount, 0, 1);
+        this.sound.volume = newVol;
+        this.volText.setText('ÂM LƯỢNG: ' + Math.round(newVol * 100) + '%');
+        this.sound.play('click');
     }
 
     createVirtualJoystick() {
@@ -65,14 +110,12 @@ class UIScene extends Phaser.Scene {
 
         // 1. Khi ngón tay chạm vào màn hình
         this.input.on('pointerdown', (pointer) => {
-            // Nếu chạm ở nửa màn hình bên trái (X < 640) và chưa có joystick nào kích hoạt
             if (pointer.x < 640 && !this.joystickActive) {
                 this.joystickActive = true;
-                this.joystickPointerId = pointer.id; // Lưu lại ID của ngón tay này
+                this.joystickPointerId = pointer.id; 
                 this.joyBaseX = pointer.x;
                 this.joyBaseY = pointer.y;
 
-                // Hiện Joystick ngay tại điểm chạm
                 this.joyBase.setPosition(this.joyBaseX, this.joyBaseY).setVisible(true);
                 this.joyThumb.setPosition(this.joyBaseX, this.joyBaseY).setVisible(true);
             }
@@ -80,7 +123,6 @@ class UIScene extends Phaser.Scene {
 
         // 2. Khi ngón tay kéo đi
         this.input.on('pointermove', (pointer) => {
-            // Chỉ xử lý nếu đúng là ngón tay đang giữ Joystick
             if (this.joystickActive && pointer.id === this.joystickPointerId) {
                 let distance = Phaser.Math.Distance.Between(this.joyBaseX, this.joyBaseY, pointer.x, pointer.y);
                 let angle = Phaser.Math.Angle.Between(this.joyBaseX, this.joyBaseY, pointer.x, pointer.y);
@@ -88,7 +130,6 @@ class UIScene extends Phaser.Scene {
                 let thumbX = pointer.x;
                 let thumbY = pointer.y;
 
-                // Nếu kéo quá xa thì giới hạn núm Joystick lại ở viền
                 if (distance > baseRadius) {
                     thumbX = this.joyBaseX + Math.cos(angle) * baseRadius;
                     thumbY = this.joyBaseY + Math.sin(angle) * baseRadius;
@@ -96,7 +137,6 @@ class UIScene extends Phaser.Scene {
 
                 this.joyThumb.setPosition(thumbX, thumbY);
 
-                // Tính toán hướng đi
                 let degrees = Phaser.Math.RadToDeg(angle);
                 
                 gameScene.moveState.up = false;
@@ -104,7 +144,6 @@ class UIScene extends Phaser.Scene {
                 gameScene.moveState.left = false;
                 gameScene.moveState.right = false;
 
-                // Deadzone: Chỉ cho nhân vật đi khi kéo ngón tay xa hơn 10 pixel
                 if (distance > 10) {
                     if (degrees >= -45 && degrees <= 45) {
                         gameScene.moveState.right = true;
@@ -125,11 +164,9 @@ class UIScene extends Phaser.Scene {
                 this.joystickActive = false;
                 this.joystickPointerId = null;
                 
-                // Giấu Joystick đi
                 this.joyBase.setVisible(false);
                 this.joyThumb.setVisible(false);
                 
-                // Dừng nhân vật
                 gameScene.moveState.up = false;
                 gameScene.moveState.down = false;
                 gameScene.moveState.left = false;
@@ -140,11 +177,12 @@ class UIScene extends Phaser.Scene {
         this.input.on('pointerup', stopJoystick);
         this.input.on('pointerout', stopJoystick);
 
-        // Nút Tương tác (E) Cố định bên góc phải (Không thay đổi)
+        // Nút Tương tác (E)
         let actBtn = this.add.circle(1150, 590, 50, 0xffcc00, 0.5).setInteractive();
         this.add.text(1150, 590, 'E', { fontSize: '40px', fill: '#000', fontStyle: 'bold' }).setOrigin(0.5);
 
-        actBtn.on('pointerdown', () => {
+        actBtn.on('pointerdown', (pointer, lx, ly, event) => {
+            event.stopPropagation(); // --- NEW: Thêm chặn sự kiện để không bị đè nút ảo ---
             actBtn.setFillStyle(0xffcc00, 0.9);
             gameScene.moveState.interact = true;
         });
@@ -180,10 +218,18 @@ class UIScene extends Phaser.Scene {
         this.feedbackText.setText(`[ +${selectedOption.score} ĐIỂM ]\nPHẢN HỒI: ${selectedOption.feedback}`);
         this.insightText.setText(`RANGER INSIGHT: ${this.currentData.rangerInsight}`);
         
+        // --- NEW: Phát âm thanh tùy theo điểm số ---
+        if (selectedOption.score >= 75) {
+            this.sound.play('success');
+        } else {
+            this.sound.play('click');
+        }
+
         this.closeButton.setVisible(true);
     }
 
     closePanel() {
+        this.sound.play('click'); // --- NEW: Tiếng click khi đóng ---
         this.panel.setVisible(false);
         this.scene.get('GameScene').isInteracting = false; 
     }

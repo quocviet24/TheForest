@@ -38,6 +38,11 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.startFollow(this.player, true, 0.05, 0.05);
         this.cameras.main.roundPixels = true; 
 
+        // --- NEW: Khởi tạo và phát nhạc nền ---
+        this.bgm = this.sound.add('bgm', { loop: true, volume: 0.4 });
+        this.walkSound = this.sound.add('walk', { loop: true, volume: 0.6 });
+        this.bgm.play();
+
         // Khai báo phím vật lý
         this.cursors = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -64,6 +69,9 @@ class GameScene extends Phaser.Scene {
             this.player.anims.stop(); 
             this.interactPrompt.setVisible(false);
             this.moveState.interact = false;
+            
+            // --- NEW: Dừng tiếng bước chân khi đứng đọc bảng ---
+            if (this.walkSound.isPlaying) this.walkSound.pause();
             return;
         }
 
@@ -92,6 +100,11 @@ class GameScene extends Phaser.Scene {
 
         if (!isMoving) {
             this.player.anims.stop(); 
+            // --- NEW: Dừng tiếng bước chân khi nhân vật đứng lại ---
+            if (this.walkSound.isPlaying) this.walkSound.pause();
+        } else {
+            // --- NEW: Phát tiếng bước chân nếu đang di chuyển ---
+            if (!this.walkSound.isPlaying) this.walkSound.play();
         }
 
         let distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.signboard.x, this.signboard.y);
@@ -100,6 +113,7 @@ class GameScene extends Phaser.Scene {
             this.interactPrompt.setVisible(true);
 
             if (Phaser.Input.Keyboard.JustDown(this.interactKey) || this.moveState.interact) {
+                this.sound.play('click'); // --- NEW: Tiếng click tương tác ---
                 this.isInteracting = true; 
                 this.scene.get('UIScene').showQuestion('Q01'); 
             }
