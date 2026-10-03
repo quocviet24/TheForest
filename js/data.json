@@ -1,0 +1,42 @@
+{
+  "questions": {
+    "Q01": {
+      "area": "01",
+      "trigger": "Bảng nội quy",
+      "situation": "Bạn chuẩn bị bắt đầu hành trình. Phía trước là một khu vực có các quy định riêng.",
+      "question": "Bạn sẽ làm gì trước khi tiếp tục?",
+      "options": [
+        {
+          "id": "A",
+          "text": "Đi thẳng vì mình chỉ tham quan một lúc",
+          "score": 50,
+          "feedback": "Thời gian tham quan ngắn không có nghĩa là các quy định có thể bỏ qua.",
+          "interaction": "warning_icon"
+        },
+        {
+          "id": "B",
+          "text": "Quan sát xem mọi người khác đang làm gì",
+          "score": 75,
+          "feedback": "Quan sát người khác có thể giúp bạn định hướng, nhưng hiểu quy định của chính khu vực mới là điều quan trọng.",
+          "interaction": "npc_point"
+        },
+        {
+          "id": "C",
+          "text": "Đọc bảng và xác định những điều mình cần tuân thủ",
+          "score": 100,
+          "feedback": "Một chuyến đi an toàn bắt đầu từ việc biết mình đang ở đâu và mình cần tôn trọng điều gì.",
+          "interaction": "board_glow"
+        },
+        {
+          "id": "D",
+          "text": "Bỏ qua vì nghĩ đã có kiểm lâm quản lý",
+          "score": 25,
+          "feedback": "Có lực lượng quản lý không có nghĩa người tham quan được bỏ qua trách nhiệm của mình.",
+          "interaction": "ranger_look"
+        }
+      ],
+      "rangerInsight": "Rừng có quy định vì rừng không chỉ là một điểm tham quan.",
+      "nextEvent": "Q02"
+    }
+  }
+}
