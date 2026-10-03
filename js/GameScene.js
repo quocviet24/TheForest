@@ -5,15 +5,11 @@ class GameScene extends Phaser.Scene {
 
     create() {
         this.physics.world.setBounds(0, 0, 2000, 2000);
-
-        // 1. TẠO NỀN MÀU XANH TRƠN (Set màu nền cho Camera)
         this.cameras.main.setBackgroundColor('#359835');
 
-        // 2. RẢI CỎ HOA ĐIỂM XUYẾT LÊN TRÊN NỀN MÀU
         const tileSize = 64; 
         for (let y = 0; y < 2000; y += tileSize) {
             for (let x = 0; x < 2000; x += tileSize) {
-                // Tỉ lệ 10% xuất hiện cỏ hoa điểm xuyết
                 if (Phaser.Math.Between(1, 100) <= 10) {
                     let flower = this.add.image(x, y, 'grass_flower').setOrigin(0, 0);
                     flower.setDisplaySize(tileSize, tileSize);
@@ -21,31 +17,28 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // 3. KHÔI PHỤC HÀM VẼ CÂY & BẢNG NỘI QUY CỦA BẠN
         this.createTextures(); 
 
-        // 4. NHÂN VẬT
         this.player = this.physics.add.sprite(1000, 1000, 'walk_down');
         this.player.setScale(2.5);
         this.player.setCollideWorldBounds(true); 
         
-        // 5. RẢI CÂY LÊN TRÊN NỀN CỎ
         this.trees = this.physics.add.staticGroup();
         for (let i = 0; i < 50; i++) {
             let x = Phaser.Math.Between(100, 1900);
             let y = Phaser.Math.Between(100, 1900);
-            this.trees.create(x, y, 'tree'); // Lấy cây nguyên bản bạn thích
+            this.trees.create(x, y, 'tree'); 
         }
         this.physics.add.collider(this.player, this.trees);
 
-        // 6. BẢNG NỘI QUY
         this.signboard = this.physics.add.staticSprite(1050, 1000, 'signboard');
         this.physics.add.collider(this.player, this.signboard);
 
         this.cameras.main.setBounds(0, 0, 2000, 2000);
         this.cameras.main.startFollow(this.player, true, 0.05, 0.05);
-        this.cameras.main.roundPixels = true; // Chống rách hình
+        this.cameras.main.roundPixels = true; 
 
+        // Khai báo phím vật lý
         this.cursors = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.W,
             down: Phaser.Input.Keyboard.KeyCodes.S,
@@ -53,6 +46,9 @@ class GameScene extends Phaser.Scene {
             right: Phaser.Input.Keyboard.KeyCodes.D
         });
         this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+        // Biến trạng thái joystick
+        this.moveState = { up: false, down: false, left: false, right: false, interact: false };
 
         this.interactPrompt = this.add.text(0, 0, '[E] Tương tác', { 
             fontSize: '14px', backgroundColor: '#000', color: '#fff', padding: { x: 5, y: 5 }
@@ -67,6 +63,7 @@ class GameScene extends Phaser.Scene {
             this.player.setVelocity(0);
             this.player.anims.stop(); 
             this.interactPrompt.setVisible(false);
+            this.moveState.interact = false;
             return;
         }
 
@@ -74,19 +71,20 @@ class GameScene extends Phaser.Scene {
         const speed = 250;
         let isMoving = false;
 
-        if (this.cursors.left.isDown) {
+        // Xử lý di chuyển
+        if (this.cursors.left.isDown || this.moveState.left) {
             this.player.setVelocityX(-speed);
             this.player.anims.play('anim_walk_left', true);
             isMoving = true;
-        } else if (this.cursors.right.isDown) {
+        } else if (this.cursors.right.isDown || this.moveState.right) {
             this.player.setVelocityX(speed);
             this.player.anims.play('anim_walk_right', true);
             isMoving = true;
-        } else if (this.cursors.up.isDown) {
+        } else if (this.cursors.up.isDown || this.moveState.up) {
             this.player.setVelocityY(-speed);
             this.player.anims.play('anim_walk_up', true);
             isMoving = true;
-        } else if (this.cursors.down.isDown) {
+        } else if (this.cursors.down.isDown || this.moveState.down) {
             this.player.setVelocityY(speed);
             this.player.anims.play('anim_walk_down', true);
             isMoving = true;
@@ -101,13 +99,15 @@ class GameScene extends Phaser.Scene {
             this.interactPrompt.setPosition(this.signboard.x, this.signboard.y - 40);
             this.interactPrompt.setVisible(true);
 
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+            if (Phaser.Input.Keyboard.JustDown(this.interactKey) || this.moveState.interact) {
                 this.isInteracting = true; 
                 this.scene.get('UIScene').showQuestion('Q01'); 
             }
         } else {
             this.interactPrompt.setVisible(false);
         }
+
+        this.moveState.interact = false;
     }
 
     createTextures() {
