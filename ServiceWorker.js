@@ -1,9 +1,9 @@
 const cacheName = "DefaultCompany-ADayInForest-1.0";
 const contentToCache = [
     "Build/A-Day-In-The-Forest.loader.js",
-    "Build/A-Day-In-The-Forest.framework.js.unityweb",
-    "Build/A-Day-In-The-Forest.data.unityweb",
-    "Build/A-Day-In-The-Forest.wasm.unityweb",
+    "Build/A-Day-In-The-Forest.framework.js",
+    "Build/A-Day-In-The-Forest.data",
+    "Build/A-Day-In-The-Forest.wasm",
     "TemplateData/style.css"
 
 ];
