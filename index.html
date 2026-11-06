@@ -1,56 +1,152 @@
 <!DOCTYPE html>
-<html lang="en-us"> 
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Ai Giữ Rừng Dzậy?</title>
-    <style>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Ai Giữ Rừng Dzậy?</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     html, body {
-      margin: 0;
-      padding: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #000000;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
     }
+
     #unity-canvas {
-      width: 100vw !important;
-      height: 100vh !important;
       display: block;
+      background: #000;
+      outline: none;
+    }
+
+    /* Thanh loading */
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 16px;
+      z-index: 10;
+    }
+    #loading-bar {
+      width: min(320px, 70vw);
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #loading-fill {
+      width: 0%;
+      height: 100%;
+      background: #7ed957;
+      transition: width 0.2s;
+    }
+
+    /* Thông báo lỗi */
+    #error-box {
+      display: none;
+      position: fixed;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      z-index: 20;
     }
   </style>
 </head>
-  </head>
-  <body style="text-align: center; padding: 0; border: 0; margin: 0;">
-    <canvas id="unity-canvas" width=1920 height=1080 tabindex="-1" style="width: 100vw; height: 100vh; display: block; background: #000000"></canvas>
-    <script src="Build/A-Day-In-The-Forest.loader.js"></script>
-    <script>
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
 
-        var canvas = document.querySelector("#unity-canvas");
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        canvas.style.position = "fixed";
+  <div id="loading">
+    <div>Đang tải game...</div>
+    <div id="loading-bar"><div id="loading-fill"></div></div>
+  </div>
 
-        document.body.style.textAlign = "left";
+  <div id="error-box">Không tải được game. Vui lòng tải lại trang (Ctrl + F5).</div>
+
+  <script src="Build/A-Day-In-The-Forest.loader.js"></script>
+  <script>
+    const canvas = document.querySelector("#unity-canvas");
+    const loading = document.getElementById("loading");
+    const loadingFill = document.getElementById("loading-fill");
+    const errorBox = document.getElementById("error-box");
+    const targetAspect = 16 / 9;
+
+    // 1. Gỡ ServiceWorker cũ (nếu có)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+
+    // 2. Co giãn canvas theo tỉ lệ 16:9, vừa khít màn hình
+    function resizeCanvasToFitScreen() {
+      const vp = window.visualViewport;
+      const winW = vp ? vp.width : window.innerWidth;
+      const winH = vp ? vp.height : window.innerHeight;
+
+      let w, h;
+      if (winW / winH > targetAspect) {
+        h = winH;
+        w = winH * targetAspect;
+      } else {
+        w = winW;
+        h = winW / targetAspect;
       }
 
-      createUnityInstance(document.querySelector("#unity-canvas"), {
-        dataUrl: "Build/A-Day-In-The-Forest.data.unityweb",
-        frameworkUrl: "Build/A-Day-In-The-Forest.framework.js.unityweb",
-        codeUrl: "Build/A-Day-In-The-Forest.wasm.unityweb",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "ADayInForest",
-        productVersion: "1.0",
-        // matchWebGLToCanvasSize: false, // Uncomment this to separately control WebGL canvas render size and DOM element size.
-        // devicePixelRatio: 1, // Uncomment this to override low DPI rendering on high DPI displays.
-      });
-    </script>
-  </body>
+      canvas.style.width = Math.floor(w) + "px";
+      canvas.style.height = Math.floor(h) + "px";
+    }
+
+    window.addEventListener("resize", resizeCanvasToFitScreen);
+    window.addEventListener("orientationchange", function () {
+      setTimeout(resizeCanvasToFitScreen, 100);
+      setTimeout(resizeCanvasToFitScreen, 300);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", resizeCanvasToFitScreen);
+    }
+    resizeCanvasToFitScreen();
+
+    // 3. Focus canvas ngay lần chạm/click đầu tiên
+    window.addEventListener("pointerdown", function () { canvas.focus(); }, true);
+
+    // 4. Khởi tạo Unity WebGL
+    createUnityInstance(canvas, {
+      dataUrl: "Build/A-Day-In-The-Forest.data.unityweb",
+      frameworkUrl: "Build/A-Day-In-The-Forest.framework.js.unityweb",
+      codeUrl: "Build/A-Day-In-The-Forest.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "ADayInForest",
+      productVersion: "1.0",
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+    }, function (progress) {
+      loadingFill.style.width = (progress * 100) + "%";
+    }).then(function () {
+      loading.style.display = "none";
+      canvas.focus();
+      resizeCanvasToFitScreen();
+    }).catch(function (message) {
+      console.error(message);
+      loading.style.display = "none";
+      errorBox.style.display = "flex";
+    });
+  </script>
+</body>
 </html>
