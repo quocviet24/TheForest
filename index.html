@@ -86,6 +86,7 @@
     const loadingFill = document.getElementById("loading-fill");
     const errorBox = document.getElementById("error-box");
     const targetAspect = 16 / 9;
+    let unityInstanceRef = null;
 
     // 1. Gỡ ServiceWorker cũ (nếu có)
     if ("serviceWorker" in navigator) {
@@ -126,7 +127,25 @@
     // 3. Focus canvas ngay lần chạm/click đầu tiên
     window.addEventListener("pointerdown", function () { canvas.focus(); }, true);
 
-    // 4. Khởi tạo Unity WebGL
+    // 4. Tạm dừng / tiếp tục âm thanh khi ẩn tab, thoát ra màn hình chính
+    function sendVisibility(state) {
+      if (!unityInstanceRef) return;
+      try {
+        unityInstanceRef.SendMessage("AudioManager", "OnBrowserVisibility", state);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    document.addEventListener("visibilitychange", function () {
+      sendVisibility(document.hidden ? "hidden" : "visible");
+    });
+    window.addEventListener("pagehide", function () { sendVisibility("hidden"); });
+    window.addEventListener("pageshow", function () {
+      sendVisibility(document.hidden ? "hidden" : "visible");
+    });
+
+    // 5. Khởi tạo Unity WebGL
     createUnityInstance(canvas, {
       dataUrl: "Build/A-Day-In-The-Forest.data.unityweb",
       frameworkUrl: "Build/A-Day-In-The-Forest.framework.js.unityweb",
@@ -138,7 +157,8 @@
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
     }, function (progress) {
       loadingFill.style.width = (progress * 100) + "%";
-    }).then(function () {
+    }).then(function (unityInstance) {
+      unityInstanceRef = unityInstance;
       loading.style.display = "none";
       canvas.focus();
       resizeCanvasToFitScreen();
