@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Ai Giữ Rừng Dzậy?</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -77,9 +80,8 @@
     <div id="loading-bar"><div id="loading-fill"></div></div>
   </div>
 
-  <div id="error-box">Không tải được game. Vui lòng tải lại trang (Ctrl + F5).</div>
+  <div id="error-box">Không tải được game. Vui lòng đóng tab và mở lại trang.</div>
 
-  <script src="Build/A-Day-In-The-Forest.loader.js"></script>
   <script>
     const canvas = document.querySelector("#unity-canvas");
     const loading = document.getElementById("loading");
@@ -88,11 +90,45 @@
     const targetAspect = 16 / 9;
     let unityInstanceRef = null;
 
-    // 1. Gỡ ServiceWorker cũ (nếu có)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (r) { r.unregister(); });
-      });
+    // Mã phiên bản: mỗi lần vào là một giá trị mới => luôn tải bản mới nhất
+    const BUILD_VERSION = Date.now();
+    const BUILD_NAME = "A-Day-In-The-Forest";
+    function buildUrl(path) { return "Build/" + path + "?v=" + BUILD_VERSION; }
+
+    function showError(err) {
+      console.error(err);
+      loading.style.display = "none";
+      errorBox.style.display = "flex";
+    }
+
+    // 1. Dọn sạch cache cũ mỗi lần vào (không cần giữ bản cũ)
+    function clearOldCaches() {
+      const tasks = [];
+
+      if ("serviceWorker" in navigator) {
+        tasks.push(
+          navigator.serviceWorker.getRegistrations()
+            .then(function (regs) { regs.forEach(function (r) { r.unregister(); }); })
+            .catch(function () {})
+        );
+      }
+
+      if ("caches" in window) {
+        tasks.push(
+          caches.keys()
+            .then(function (names) { return Promise.all(names.map(function (n) { return caches.delete(n); })); })
+            .catch(function () {})
+        );
+      }
+
+      // Xóa cache IndexedDB cũ của Unity (nơi lưu file .data)
+      try {
+        ["UnityCache", "/idbfs"].forEach(function (db) {
+          if (db === "UnityCache") indexedDB.deleteDatabase(db);
+        });
+      } catch (e) {}
+
+      return Promise.all(tasks);
     }
 
     // 2. Co giãn canvas theo tỉ lệ 16:9, vừa khít màn hình
@@ -141,31 +177,46 @@
       sendVisibility(document.hidden ? "hidden" : "visible");
     });
     window.addEventListener("pagehide", function () { sendVisibility("hidden"); });
-    window.addEventListener("pageshow", function () {
+
+    // Quay lại từ bộ nhớ đệm back/forward (bfcache) trên điện thoại => tải lại trang mới
+    window.addEventListener("pageshow", function (e) {
+      if (e.persisted) {
+        window.location.reload();
+        return;
+      }
       sendVisibility(document.hidden ? "hidden" : "visible");
     });
 
     // 5. Khởi tạo Unity WebGL
-    createUnityInstance(canvas, {
-      dataUrl: "Build/A-Day-In-The-Forest.data.unityweb",
-      frameworkUrl: "Build/A-Day-In-The-Forest.framework.js.unityweb",
-      codeUrl: "Build/A-Day-In-The-Forest.wasm.unityweb",
-      streamingAssetsUrl: "StreamingAssets",
-      companyName: "DefaultCompany",
-      productName: "ADayInForest",
-      productVersion: "1.0",
-      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
-    }, function (progress) {
-      loadingFill.style.width = (progress * 100) + "%";
-    }).then(function (unityInstance) {
-      unityInstanceRef = unityInstance;
-      loading.style.display = "none";
-      canvas.focus();
-      resizeCanvasToFitScreen();
-    }).catch(function (message) {
-      console.error(message);
-      loading.style.display = "none";
-      errorBox.style.display = "flex";
+    function startUnity() {
+      createUnityInstance(canvas, {
+        dataUrl: buildUrl(BUILD_NAME + ".data.unityweb"),
+        frameworkUrl: buildUrl(BUILD_NAME + ".framework.js.unityweb"),
+        codeUrl: buildUrl(BUILD_NAME + ".wasm.unityweb"),
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "ADayInForest",
+        productVersion: "1.0",
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        // Không cho Unity lưu cache, luôn tải mới
+        cacheControl: function (url) { return "no-store"; }
+      }, function (progress) {
+        loadingFill.style.width = (progress * 100) + "%";
+      }).then(function (unityInstance) {
+        unityInstanceRef = unityInstance;
+        loading.style.display = "none";
+        canvas.focus();
+        resizeCanvasToFitScreen();
+      }).catch(showError);
+    }
+
+    // 6. Dọn cache xong mới tải file loader (kèm mã phiên bản) rồi chạy game
+    clearOldCaches().then(function () {
+      const script = document.createElement("script");
+      script.src = buildUrl(BUILD_NAME + ".loader.js");
+      script.onload = startUnity;
+      script.onerror = function () { showError("Không tải được loader.js"); };
+      document.body.appendChild(script);
     });
   </script>
 </body>
