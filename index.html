@@ -76,11 +76,14 @@
   <canvas id="unity-canvas" tabindex="-1"></canvas>
 
   <div id="loading">
-    <div>Đang tải game...</div>
-    <div id="loading-bar"><div id="loading-fill"></div></div>
+    <div id="loading-status" role="status" aria-live="polite">Đang tải game...</div>
+    <div id="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loading-fill"></div></div>
   </div>
 
-  <div id="error-box">Không tải được game. Vui lòng đóng tab và mở lại trang.</div>
+  <div id="error-box" role="alert"><div>
+    <p id="error-message">Không tải được game. Hãy kiểm tra kết nối rồi thử lại.</p>
+    <button id="retry" type="button" style="margin-top:20px;padding:12px 24px;font-size:16px;cursor:pointer">Thử lại</button>
+  </div></div>
 
   <script>
     const canvas = document.querySelector("#unity-canvas");
@@ -90,46 +93,33 @@
     const targetAspect = 16 / 9;
     let unityInstanceRef = null;
 
-    // Mã phiên bản: mỗi lần vào là một giá trị mới => luôn tải bản mới nhất
-    const BUILD_VERSION = Date.now();
-    const BUILD_NAME = "A-Day-In-The-Forest";
-    function buildUrl(path) { return "Build/" + path + "?v=" + BUILD_VERSION; }
+    const loadingStatus = document.getElementById("loading-status");
+    const progressBar = document.getElementById("loading-bar");
+    let failed = false;
+    let lastProgressAt = performance.now();
+    let lastProgress = 0;
+    const loadStartedAt = performance.now();
+    try { performance.mark("forest-load-start"); } catch (e) {}
+    document.getElementById("retry").addEventListener("click", function () { window.location.reload(); });
 
+    // Stable payload fingerprint also versions the loader and distinguishes gzip/Brotli variants.
+    // No timestamps, storage deletion or per-visit cache invalidation.
+    const BUILD_VERSION = "1e8541ca4cf2e21d67dfeb5130141119.data.unityweb|486c55ee911b5f74b2390818368a5c8f.wasm.unityweb|8e3024cc7aaa51b39a453e13e67944d5.framework.js.unityweb|Brotli";
+    function buildUrl(path) { return "Build/" + path + "?v=" + encodeURIComponent(BUILD_VERSION); }
     function showError(err) {
-      console.error(err);
+      if (failed) return;
+      failed = true;
+      console.error("Unity initialization failed:", err);
       loading.style.display = "none";
       errorBox.style.display = "flex";
     }
-
-    // 1. Dọn sạch cache cũ mỗi lần vào (không cần giữ bản cũ)
-    function clearOldCaches() {
-      const tasks = [];
-
-      if ("serviceWorker" in navigator) {
-        tasks.push(
-          navigator.serviceWorker.getRegistrations()
-            .then(function (regs) { regs.forEach(function (r) { r.unregister(); }); })
-            .catch(function () {})
-        );
-      }
-
-      if ("caches" in window) {
-        tasks.push(
-          caches.keys()
-            .then(function (names) { return Promise.all(names.map(function (n) { return caches.delete(n); })); })
-            .catch(function () {})
-        );
-      }
-
-      // Xóa cache IndexedDB cũ của Unity (nơi lưu file .data)
-      try {
-        ["UnityCache", "/idbfs"].forEach(function (db) {
-          if (db === "UnityCache") indexedDB.deleteDatabase(db);
-        });
-      } catch (e) {}
-
-      return Promise.all(tasks);
-    }
+    // Inform the player about slow progress without declaring a valid download failed.
+    const statusTimer = setInterval(function () {
+      if (failed || unityInstanceRef) { clearInterval(statusTimer); return; }
+      if (!navigator.onLine) loadingStatus.textContent = "Mất kết nối mạng. Đang chờ kết nối trở lại...";
+      else if (performance.now() - lastProgressAt > 15000)
+        loadingStatus.textContent = "Đang tải hoặc khởi tạo game (" + Math.floor(lastProgress * 100) + "%). Lần đầu có thể lâu hơn, vui lòng chờ...";
+    }, 2000);
 
     // 2. Co giãn canvas theo tỉ lệ 16:9, vừa khít màn hình
     function resizeCanvasToFitScreen() {
@@ -190,34 +180,49 @@
     // 5. Khởi tạo Unity WebGL
     function startUnity() {
       createUnityInstance(canvas, {
-        dataUrl: buildUrl(BUILD_NAME + ".data.unityweb"),
-        frameworkUrl: buildUrl(BUILD_NAME + ".framework.js.unityweb"),
-        codeUrl: buildUrl(BUILD_NAME + ".wasm.unityweb"),
+        dataUrl: buildUrl("1e8541ca4cf2e21d67dfeb5130141119.data.unityweb"),
+        frameworkUrl: buildUrl("8e3024cc7aaa51b39a453e13e67944d5.framework.js.unityweb"),
+        codeUrl: buildUrl("486c55ee911b5f74b2390818368a5c8f.wasm.unityweb"),
         streamingAssetsUrl: "StreamingAssets",
         companyName: "DefaultCompany",
         productName: "ADayInForest",
         productVersion: "1.0",
         devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-        // Không cho Unity lưu cache, luôn tải mới
-        cacheControl: function (url) { return "no-store"; }
+        showBanner: function (message, type) {
+          if (type === "error") showError(message);
+          else console.warn(message);
+        },
+        // Only content-addressed Build files are immutable. StreamingAssets may retain their names.
+        cacheControl: function (url) {
+          return /\/Build\/[0-9a-f]{32}\./i.test(new URL(url, document.baseURI).pathname) ? "immutable" : "must-revalidate";
+        }
       }, function (progress) {
-        loadingFill.style.width = (progress * 100) + "%";
+        lastProgress = Math.max(0, Math.min(1, progress));
+        lastProgressAt = performance.now();
+        loadingFill.style.width = (lastProgress * 100) + "%";
+        progressBar.setAttribute("aria-valuenow", Math.floor(lastProgress * 100));
+        loadingStatus.textContent = (lastProgress >= 0.9 ? "Đang khởi tạo game... " : "Đang tải game... ") + Math.floor(lastProgress * 100) + "%";
       }).then(function (unityInstance) {
         unityInstanceRef = unityInstance;
+        clearInterval(statusTimer);
+        try {
+          performance.mark("forest-unity-ready");
+          performance.measure("forest-loading", "forest-load-start", "forest-unity-ready");
+        } catch (e) {}
+        console.info("Forest Unity ready (ms):", performance.now() - loadStartedAt);
         loading.style.display = "none";
         canvas.focus();
         resizeCanvasToFitScreen();
       }).catch(showError);
     }
 
-    // 6. Dọn cache xong mới tải file loader (kèm mã phiên bản) rồi chạy game
-    clearOldCaches().then(function () {
-      const script = document.createElement("script");
-      script.src = buildUrl(BUILD_NAME + ".loader.js");
-      script.onload = startUnity;
-      script.onerror = function () { showError("Không tải được loader.js"); };
-      document.body.appendChild(script);
-    });
+    const script = document.createElement("script");
+    script.src = buildUrl("cee3bfd5589651a8b16e2a12b8abe5b3.loader.js");
+    script.onload = function () {
+      try { startUnity(); } catch (err) { showError(err); }
+    };
+    script.onerror = function () { showError("Không tải được Unity loader. Kiểm tra kết nối hoặc phiên bản triển khai."); };
+    document.body.appendChild(script);
   </script>
 </body>
 </html>
